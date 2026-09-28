@@ -30,8 +30,10 @@ export type RelayWaitOutcome =
 	| "ready"
 	/** Nothing (or something that is not a relay) is serving the endpoint. */
 	| "unreachable"
-	/** The relay is serving but no extension connected within the dial window. */
-	| "no-extension";
+	/** The relay is serving but no extension has ever connected to it. */
+	| "no-extension"
+	/** An extension connected earlier but did not come back within the dial window (e.g. the browser was quit). */
+	| "extension-lost";
 
 function parseUnavailableInfo(body: string): RelayUnavailableInfo | null {
 	try {
@@ -55,8 +57,9 @@ function parseUnavailableInfo(body: string): RelayUnavailableInfo | null {
 /**
  * Poll the relay at `cdpUrl` until its extension is connected. Gives up
  * immediately when nothing serves the endpoint, after one dial window when
- * an extension has connected before (service-worker revival), or as soon as
- * the server has been up a full dial window without ever seeing one.
+ * an extension has connected before (service-worker revival, else
+ * `extension-lost`), or as soon as the server has been up a full dial window
+ * without ever seeing one.
  */
 export async function waitForRelayExtension(cdpUrl: string, signal?: AbortSignal): Promise<RelayWaitOutcome> {
 	const probeUrl = `${cdpUrl}/json/version`;
@@ -73,7 +76,7 @@ export async function waitForRelayExtension(cdpUrl: string, signal?: AbortSignal
 			// Never connected: the window is measured from server start, not from now.
 			deadline = Math.min(deadline, Date.now() - info.uptimeMs + EXTENSION_DIAL_WINDOW_MS);
 		}
-		if (Date.now() >= deadline) return "no-extension";
+		if (Date.now() >= deadline) return info?.extensionSeen ? "extension-lost" : "no-extension";
 		await Bun.sleep(POLL_INTERVAL_MS);
 	}
 }

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, setSystemTime } from "bun:test";
 import { findFreeCdpPort } from "@oh-my-pi/pi-coding-agent/tools/browser/attach";
 import { waitForRelayExtension } from "@oh-my-pi/pi-coding-agent/tools/browser/relay/probe";
 import {
@@ -21,6 +21,7 @@ describe("waitForRelayExtension", () => {
 	let extension: WebSocket | undefined;
 
 	afterEach(() => {
+		setSystemTime();
 		extension?.close();
 		relay?.stop();
 		fake?.stop(true);
@@ -50,6 +51,24 @@ describe("waitForRelayExtension", () => {
 		const started = performance.now();
 		expect(await waitForRelayExtension(`http://127.0.0.1:${fake.port}`)).toBe("no-extension");
 		expect(performance.now() - started).toBeLessThan(2_000);
+	});
+
+	it("reports a lost extension, not a missing one, when an extension connected before and never came back", async () => {
+		const info: RelayUnavailableInfo = {
+			error: "relay extension is not connected",
+			extensionSeen: true,
+			uptimeMs: 60_000,
+		};
+		fake = Bun.serve({
+			hostname: "127.0.0.1",
+			port: 0,
+			fetch: () => {
+				// Jump past the reconnect window so the wait expires on the first probe.
+				setSystemTime(new Date(Date.now() + 60_000));
+				return Response.json(info, { status: 503 });
+			},
+		});
+		expect(await waitForRelayExtension(`http://127.0.0.1:${fake.port}`)).toBe("extension-lost");
 	});
 
 	it("keeps polling a young relay and reports ready once the extension handshakes", async () => {

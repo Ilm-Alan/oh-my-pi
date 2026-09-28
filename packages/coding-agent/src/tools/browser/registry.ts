@@ -241,6 +241,11 @@ async function openBrowserHandle(kind: BrowserKind, opts: AcquireBrowserOptions)
 				`omp browser relay is serving at ${cdpUrl} but its extension never connected. Install it with \`omp browser-relay install\` and check the toolbar badge shows "on".`,
 			);
 		}
+		if (outcome === "extension-lost") {
+			throw new ToolError(
+				`omp browser relay is serving at ${cdpUrl} but its extension disconnected and has not reconnected. Make sure the browser with the OMP Browser Relay extension is running; it reconnects on its own once the browser is open.`,
+			);
+		}
 		const puppeteer = await loadPuppeteer();
 		const browser = await puppeteer.connect({
 			browserURL: cdpUrl,
